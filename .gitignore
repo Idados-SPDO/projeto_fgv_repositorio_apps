@@ -1,0 +1,49 @@
+# ---- Streamlit secrets (NUNCA versionar) ----
+.streamlit/secrets.toml
+.streamlit/secrets.local.toml
+
+# ---- Variáveis de ambiente ----
+.env
+.env.local
+.env.*.local
+
+# ---- Python ----
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg
+*.egg-info/
+.eggs/
+dist/
+build/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# ---- Ambientes virtuais ----
+.venv/
+venv/
+env/
+ENV/
+
+# ---- IDEs / Editores ----
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# ---- Sistema operacional ----
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ---- Logs ----
+*.log
+logs/
+
+# ---- Notebooks ----
+.ipynb_checkpoints/
