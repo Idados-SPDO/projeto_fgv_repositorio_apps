@@ -91,4 +91,5 @@ def render() -> None:
                 fav_ids=fav_ids,
                 user_id=user["id"],
                 context=f"home_{area_name}",
+                access_token=auth.get_access_token(),
             )
