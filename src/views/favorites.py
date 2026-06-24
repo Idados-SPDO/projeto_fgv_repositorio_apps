@@ -39,4 +39,5 @@ def render() -> None:
         fav_ids=fav_ids,
         user_id=user["id"],
         context="favorites",
+        access_token=auth.get_access_token(),
     )
