@@ -92,4 +92,5 @@ def render() -> None:
                 user_id=user["id"],
                 context=f"home_{area_name}",
                 access_token=auth.get_access_token(),
+                refresh_token=auth.get_refresh_token(),
             )
