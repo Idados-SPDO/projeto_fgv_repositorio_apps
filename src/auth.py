@@ -28,7 +28,7 @@ def init_session() -> None:
 
 def _auth_api_url() -> str:
     return st.secrets.get("auth_api", {}).get(
-        "base_url", "http://54.172.164.97:8080"
+        "base_url", "http://100.30.180.22:8080"
     )
 
 
