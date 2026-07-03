@@ -49,12 +49,20 @@ button[data-testid="stBaseButton-secondary"]:has(div:is(p):only-child) {
 """
 
 
-def _open_button_html(app_url: str, access_token: str | None, uid: str, app_id: int) -> str:
+def _open_button_html(
+    app_url: str,
+    access_token: str | None,
+    uid: str,
+    app_id: int,
+    refresh_token: str | None = None,
+) -> str:
     """Gera o HTML do botão 'Abrir'.
 
     Se houver um access_token e a app for a url-updater (APP_ID=801),
     usa um formulário POST oculto para enviar o JWT ao endpoint /auth-login
-    do app destino (SSO via Nginx sidecar).
+    do app destino (SSO via Nginx sidecar). O refresh_token, se disponível,
+    vai junto para o sidecar poder renovar a sessão sozinho quando o access
+    token expirar, sem precisar que o usuário volte ao hub.
     Caso contrário, usa um link direto (fallback).
     """
     safe_url = html_mod.escape(app_url, quote=True)
@@ -69,9 +77,15 @@ def _open_button_html(app_url: str, access_token: str | None, uid: str, app_id: 
     auth_url = f"{safe_url.rstrip('/')}/auth-login"
     form_id = f"sso_form_{uid}"
 
+    refresh_field = ""
+    if refresh_token:
+        safe_refresh = html_mod.escape(refresh_token, quote=True)
+        refresh_field = f"<input type='hidden' name='refresh_token' value='{safe_refresh}'>"
+
     return (
         f"<form id='{form_id}' method='POST' action='{auth_url}' target='_blank' style='display:inline;margin:0;padding:0;'>"
         f"<input type='hidden' name='token' value='{safe_token}'>"
+        f"{refresh_field}"
         f"<button type='submit' class='fgv-card-open'>Abrir &nbsp;&rsaquo;</button>"
         f"</form>"
     )
@@ -84,11 +98,12 @@ def render_card(
     user_id: int,
     context: str,
     access_token: str | None = None,
+    refresh_token: str | None = None,
 ) -> None:
     """Renderiza um card de aplicação dentro de um st.container."""
     app_id = int(app["APP_ID"])
     is_fav = app_id in fav_ids
-    icon = app["ICON"] or "⚙️"
+    icon = html_mod.escape(str(app["ICON"] or "⚙️"))
 
     with st.container(border=True):
         head_l, head_r = st.columns([4, 1])
@@ -108,13 +123,15 @@ def render_card(
                 db.toggle_favorite(user_id, app_id)
                 st.rerun()
 
+        safe_name = html_mod.escape(str(app["NAME"]))
         st.markdown(
-            f"<p class='fgv-card-title'>{app['NAME']}</p>",
+            f"<p class='fgv-card-title'>{safe_name}</p>",
             unsafe_allow_html=True,
         )
         if app["DESCRIPTION"]:
+            safe_desc = html_mod.escape(str(app["DESCRIPTION"]))
             st.markdown(
-                f"<p class='fgv-card-desc'>{app['DESCRIPTION']}</p>",
+                f"<p class='fgv-card-desc'>{safe_desc}</p>",
                 unsafe_allow_html=True,
             )
         st.markdown(
@@ -127,6 +144,7 @@ def render_card(
             access_token,
             uid=f"{context}_{app_id}",
             app_id=app_id,
+            refresh_token=refresh_token,
         )
         st.markdown(btn_html, unsafe_allow_html=True)
 
@@ -138,6 +156,7 @@ def render_grid(
     user_id: int,
     context: str,
     access_token: str | None = None,
+    refresh_token: str | None = None,
     cols: int = 3,
 ) -> None:
     """Renderiza um grid de cards (cols por linha)."""
@@ -154,5 +173,6 @@ def render_grid(
                     user_id=user_id,
                     context=f"{context}_{i}",
                     access_token=access_token,
+                    refresh_token=refresh_token,
                 )
 
