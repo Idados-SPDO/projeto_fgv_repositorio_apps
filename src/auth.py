@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from typing import Optional
+import time
 
 import bcrypt
 import requests
@@ -20,13 +21,14 @@ def init_session() -> None:
     st.session_state.setdefault("page", "login")
     st.session_state.setdefault("access_token", None)
     st.session_state.setdefault("refresh_token", None)
+    st.session_state.setdefault("token_expires_at", 0)
 
 
 # ---------- login via API centralizada ----------------------------------------
 
 def _auth_api_url() -> str:
     return st.secrets.get("auth_api", {}).get(
-        "base_url", "http://54.172.164.97:8080"
+        "base_url", "http://100.30.180.22:8080"
     )
 
 
@@ -65,6 +67,7 @@ def login(email: str, password: str) -> tuple[bool, str]:
     # Guardar tokens e dados do usuário na sessão
     st.session_state["access_token"] = access_token
     st.session_state["refresh_token"] = refresh_token
+    st.session_state["token_expires_at"] = time.time() + (14 * 60) # Expira em 14 min (o token real dura 15)
 
     db.touch_last_login(user["USER_ID"])
     st.session_state["user"] = {
@@ -85,14 +88,59 @@ def login(email: str, password: str) -> tuple[bool, str]:
 
 # ---------- token JWT ---------------------------------------------------------
 
+def refresh_session() -> bool:
+    """Tenta renovar o access_token usando o refresh_token atual."""
+    refresh_token = st.session_state.get("refresh_token")
+    if not refresh_token:
+        return False
+        
+    url = f"{_auth_api_url()}/refresh"
+    try:
+        resp = requests.post(url, json={"refresh_token": refresh_token}, timeout=10)
+        if resp.ok:
+            data = resp.json()
+            tokens = data.get("tokens", {})
+            if tokens.get("access_token"):
+                st.session_state["access_token"] = tokens["access_token"]
+                st.session_state["refresh_token"] = tokens.get("refresh_token", refresh_token)
+                st.session_state["token_expires_at"] = time.time() + (14 * 60)
+                return True
+    except Exception:
+        pass
+        
+    # Se falhou em renovar, limpa a sessão (logout forçado)
+    logout()
+    return False
+
 def get_access_token() -> Optional[str]:
-    """Retorna o access_token JWT da sessão atual (ou None)."""
+    """Retorna o access_token JWT da sessão atual (ou None), renovando se necessário."""
+    expires_at = st.session_state.get("token_expires_at", 0)
+    # Se faltar menos de 1 minuto para expirar ou já expirou, renova
+    if time.time() >= expires_at:
+        if st.session_state.get("refresh_token"):
+            refresh_session()
+            
     return st.session_state.get("access_token")
+
+
+def get_refresh_token() -> Optional[str]:
+    """Retorna o refresh_token atual da sessão (ou None).
+
+    Chamar depois de get_access_token() no mesmo fluxo garante pegar a
+    versão mais recente, já que a renovação proativa pode rotacioná-lo.
+    """
+    return st.session_state.get("refresh_token")
 
 
 # ---------- sessão (cont.) ----------------------------------------------------
 
 def logout() -> None:
+    token = st.session_state.get("access_token")
+    if token:
+        try:
+            requests.post(f"{_auth_api_url()}/logout", json={"token": token}, timeout=5)
+        except requests.RequestException:
+            pass  # logout local prossegue mesmo se a revogação central falhar
     for key in SESSION_KEYS:
         st.session_state.pop(key, None)
     init_session()
