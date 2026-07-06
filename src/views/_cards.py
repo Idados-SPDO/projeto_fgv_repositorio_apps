@@ -10,41 +10,84 @@ from .. import areas as areas_mod
 from .. import db
 
 
-CARD_CSS = """
+# altura fixa do corpo do card (título + descrição + área + botão). Mantém
+# todos os cards do mesmo tamanho independentemente do texto; a descrição
+# rola internamente quando é longa.
+CARD_BODY_HEIGHT = "196px"
+
+CARD_CSS = f"""
 <style>
 /* container do card (st.container(border=True)) */
-div[data-testid="stVerticalBlockBorderWrapper"] {
+div[data-testid="stVerticalBlockBorderWrapper"] {{
     border-radius: 14px !important;
     border: 1px solid #e3e7ee !important;
     box-shadow: 0 1px 2px rgba(15, 30, 60, 0.04);
     transition: box-shadow 0.12s ease, border-color 0.12s ease;
-}
-div[data-testid="stVerticalBlockBorderWrapper"]:hover {
+    height: 100%;
+}}
+div[data-testid="stVerticalBlockBorderWrapper"]:hover {{
     box-shadow: 0 6px 18px rgba(15, 30, 60, 0.10);
     border-color: #c7d2e3 !important;
-}
-/* botao da estrela: discreto */
-button[data-testid="stBaseButton-secondary"]:has(div:is(p):only-child) {
-    /* fallback geral */
-}
-.fgv-card-icon { font-size: 1.9rem; line-height: 1; padding-top: 4px; }
-.fgv-card-title { font-size: 1.05rem; font-weight: 600; color: #1f2937; margin: 4px 0 2px 0; }
-.fgv-card-desc  { font-size: 0.88rem; color: #6b7280; margin: 0 0 6px 0; }
-.fgv-card-area  { font-size: 0.82rem; color: #1f4e79; font-weight: 600; margin: 0 0 10px 0; }
-.fgv-card-area b { font-weight: 700; }
-.fgv-card-open  {
+}}
+/* colunas do grid esticam para a mesma altura da linha */
+div[data-testid="stHorizontalBlock"] {{
+    align-items: stretch;
+}}
+.fgv-card-icon {{ font-size: 1.9rem; line-height: 1; padding-top: 4px; }}
+
+/* corpo do card: coluna flex de altura fixa -> cards uniformes */
+.fgv-card-body {{
+    display: flex;
+    flex-direction: column;
+    height: {CARD_BODY_HEIGHT};
+}}
+.fgv-card-title {{
+    font-size: 1.05rem; font-weight: 600; color: #1f2937;
+    margin: 4px 0 4px 0; flex: 0 0 auto;
+}}
+/* descrição rola quando maior que o espaço disponível */
+.fgv-card-desc-wrap {{
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    margin-bottom: 8px;
+}}
+.fgv-card-desc {{ font-size: 0.88rem; color: #6b7280; margin: 0; }}
+.fgv-card-desc-wrap::-webkit-scrollbar {{ width: 6px; }}
+.fgv-card-desc-wrap::-webkit-scrollbar-thumb {{
+    background: #d5dbe6; border-radius: 3px;
+}}
+.fgv-card-area {{
+    font-size: 0.82rem; color: #1f4e79; font-weight: 600;
+    margin: 0 0 10px 0; flex: 0 0 auto;
+}}
+.fgv-card-area b {{ font-weight: 700; }}
+
+/* área de ações: botão sempre no rodapé e centralizado */
+.fgv-card-actions {{
+    flex: 0 0 auto;
+    display: flex;
+    justify-content: center;
+    margin-top: auto;
+}}
+.fgv-card-actions form {{ margin: 0; padding: 0; }}
+.fgv-card-open {{
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
     background: #1f4e79;
     color: #fff !important;
     text-decoration: none !important;
-    padding: 6px 14px;
+    padding: 9px 22px;
     border-radius: 8px;
     font-size: 0.85rem;
     font-weight: 500;
-    display: inline-block;
+    line-height: 1.1;
     cursor: pointer;
     border: none;
-}
-.fgv-card-open:hover { background: #163a5c; }
+}}
+.fgv-card-open:hover {{ background: #163a5c; }}
 </style>
 """
 
@@ -83,7 +126,7 @@ def _open_button_html(
         refresh_field = f"<input type='hidden' name='refresh_token' value='{safe_refresh}'>"
 
     return (
-        f"<form id='{form_id}' method='POST' action='{auth_url}' target='_blank' style='display:inline;margin:0;padding:0;'>"
+        f"<form id='{form_id}' method='POST' action='{auth_url}' target='_blank'>"
         f"<input type='hidden' name='token' value='{safe_token}'>"
         f"{refresh_field}"
         f"<button type='submit' class='fgv-card-open'>Abrir &nbsp;&rsaquo;</button>"
@@ -124,20 +167,10 @@ def render_card(
                 st.rerun()
 
         safe_name = html_mod.escape(str(app["NAME"]))
-        st.markdown(
-            f"<p class='fgv-card-title'>{safe_name}</p>",
-            unsafe_allow_html=True,
-        )
+        desc_html = ""
         if app["DESCRIPTION"]:
             safe_desc = html_mod.escape(str(app["DESCRIPTION"]))
-            st.markdown(
-                f"<p class='fgv-card-desc'>{safe_desc}</p>",
-                unsafe_allow_html=True,
-            )
-        st.markdown(
-            f"<p class='fgv-card-area'><b>Área:</b> {areas_mod.display_name(app['AREA'])}</p>",
-            unsafe_allow_html=True,
-        )
+            desc_html = f"<p class='fgv-card-desc'>{safe_desc}</p>"
 
         btn_html = _open_button_html(
             app["URL"],
@@ -146,7 +179,18 @@ def render_card(
             app_id=app_id,
             refresh_token=refresh_token,
         )
-        st.markdown(btn_html, unsafe_allow_html=True)
+
+        st.markdown(
+            f"""
+            <div class='fgv-card-body'>
+                <p class='fgv-card-title'>{safe_name}</p>
+                <div class='fgv-card-desc-wrap'>{desc_html}</div>
+                <p class='fgv-card-area'><b>Área:</b> {areas_mod.display_name(app['AREA'])}</p>
+                <div class='fgv-card-actions'>{btn_html}</div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
 
 
 def render_grid(
@@ -175,4 +219,3 @@ def render_grid(
                     access_token=access_token,
                     refresh_token=refresh_token,
                 )
-

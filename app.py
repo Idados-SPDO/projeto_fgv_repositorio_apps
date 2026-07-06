@@ -4,7 +4,15 @@ from __future__ import annotations
 import streamlit as st
 
 from src import auth, branding
-from src.views import admin_apps, admin_users, change_password, favorites, home, login
+from src.views import (
+    admin_apps,
+    admin_permissions,
+    admin_users,
+    change_password,
+    favorites,
+    home,
+    login,
+)
 
 
 PAGES = {
@@ -13,8 +21,11 @@ PAGES = {
     "change_password": change_password.render,
     "admin_users": admin_users.render,
     "admin_apps": admin_apps.render,
+    "admin_permissions": admin_permissions.render,
     "login": login.render,
 }
+
+ADMIN_PAGES = {"admin_users", "admin_apps", "admin_permissions"}
 
 PRE_LOGIN_PAGES = {"login", "change_password"}
 
@@ -113,6 +124,10 @@ def _sidebar(user: dict) -> None:
                          type="primary" if page == "admin_apps" else "secondary"):
                 st.session_state["page"] = "admin_apps"
                 st.rerun()
+            if st.button("Gerenciar acessos", use_container_width=True,
+                         type="primary" if page == "admin_permissions" else "secondary"):
+                st.session_state["page"] = "admin_permissions"
+                st.rerun()
 
         st.markdown("<div class='fgv-nav-label'>Conta</div>", unsafe_allow_html=True)
         if st.button("Alterar senha", use_container_width=True):
@@ -135,7 +150,7 @@ def main() -> None:
     elif user.get("must_change_password") and page != "change_password":
         page = "change_password"
         st.session_state["page"] = page
-    elif page in ("admin_users", "admin_apps") and not auth.is_admin():
+    elif page in ADMIN_PAGES and not auth.is_admin():
         page = "home"
         st.session_state["page"] = page
 

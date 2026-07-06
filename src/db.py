@@ -1,8 +1,10 @@
 """Camada de acesso a dados (Snowflake).
 
 Tabelas:
-- TBL_USUARIOS_PROD       (usuarios da plataforma)
-- TBL_DOMINIOS_APPS_PROD  (dominios/URLs das aplicacoes internas)
+- TBL_USUARIOS_PROD             (usuarios da plataforma)
+- TBL_DOMINIOS_APPS_PROD        (dominios/URLs das aplicacoes internas)
+- TBL_FAVORITOS_PROD            (favoritos por usuario)
+- TBL_USUARIOS_PERMISSOES_PROD  (acesso de um usuario a um app; lido pela lambda_auth)
 """
 from __future__ import annotations
 
@@ -260,3 +262,48 @@ def list_favorite_applications(user_id: int) -> pd.DataFrame:
         [user_id],
     )
     return pd.DataFrame(rows)
+
+
+# ---------- TBL_USUARIOS_PERMISSOES_PROD --------------------------------------
+
+def list_permissions() -> pd.DataFrame:
+    """Todas as permissões concedidas, já com nome do usuário e da aplicação."""
+    rows = _run(
+        """
+        SELECT p.USER_ID, p.APP_ID, p.CREATED_AT,
+               u.FULL_NAME, u.EMAIL,
+               a.NAME AS APP_NAME, a.AREA
+          FROM TBL_USUARIOS_PERMISSOES_PROD p
+          JOIN TBL_USUARIOS_PROD      u ON u.USER_ID = p.USER_ID
+          JOIN TBL_DOMINIOS_APPS_PROD a ON a.APP_ID = p.APP_ID
+         ORDER BY a.NAME, u.FULL_NAME
+        """
+    )
+    return pd.DataFrame(rows)
+
+
+def grant_app_permission(user_id: int, app_id: int) -> bool:
+    """Concede acesso do usuário ao app. Retorna True se inseriu, False se já existia.
+
+    O INSERT ... WHERE NOT EXISTS evita linhas duplicadas mesmo sem constraint
+    de unicidade na tabela. CREATED_AT usa o default CURRENT_TIMESTAMP().
+    """
+    inserted = _execute(
+        """
+        INSERT INTO TBL_USUARIOS_PERMISSOES_PROD (USER_ID, APP_ID, CREATED_AT)
+        SELECT %s, %s, CURRENT_TIMESTAMP()
+         WHERE NOT EXISTS (
+             SELECT 1 FROM TBL_USUARIOS_PERMISSOES_PROD
+              WHERE USER_ID = %s AND APP_ID = %s
+         )
+        """,
+        [user_id, app_id, user_id, app_id],
+    )
+    return inserted > 0
+
+
+def revoke_app_permission(user_id: int, app_id: int) -> None:
+    _execute(
+        "DELETE FROM TBL_USUARIOS_PERMISSOES_PROD WHERE USER_ID = %s AND APP_ID = %s",
+        [user_id, app_id],
+    )
