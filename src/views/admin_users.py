@@ -12,20 +12,6 @@ from .. import auth, db
 DEFAULT_PASSWORD = "FGV@12345"
 
 
-_TABLE_CSS = """
-<style>
-.admin-table-row { border-bottom: 1px solid #eef1f6; padding: 6px 0; }
-.admin-table-header {
-    background: #f4f6fa; border-bottom: 2px solid #1f4e79;
-    padding: 8px 4px; border-radius: 6px 6px 0 0;
-}
-.admin-table-header span { color: #1f4e79; font-weight: 700; font-size: 0.82rem;
-    text-transform: uppercase; letter-spacing: 0.4px; }
-.admin-meta { color: #94a3b8; font-size: 0.72rem; margin-top: 2px; }
-</style>
-"""
-
-
 def _guard() -> dict:
     user = auth.require_login()
     if not auth.is_admin():
@@ -296,7 +282,6 @@ def render() -> None:
     me = _guard()
     st.header("Gerenciar usuários")
     st.caption("Cadastre, edite ou desative usuários da plataforma.")
-    st.markdown(_TABLE_CSS, unsafe_allow_html=True)
 
     # mensagem flash de dialog anterior
     flash = st.session_state.pop("_flash", None)

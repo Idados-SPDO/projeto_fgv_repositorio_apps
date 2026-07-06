@@ -12,19 +12,6 @@ from .. import areas as areas_mod
 from .. import auth, db
 
 
-_TABLE_CSS = """
-<style>
-.perm-table-header {
-    background: #f4f6fa; border-bottom: 2px solid #1f4e79;
-    padding: 8px 4px; border-radius: 6px 6px 0 0;
-}
-.perm-table-header span { color: #1f4e79; font-weight: 700; font-size: 0.82rem;
-    text-transform: uppercase; letter-spacing: 0.4px; }
-.perm-meta { color: #94a3b8; font-size: 0.72rem; margin-top: 2px; }
-</style>
-"""
-
-
 def _guard() -> dict:
     user = auth.require_login()
     if not auth.is_admin():
@@ -106,7 +93,7 @@ def _table_header() -> None:
     cols = st.columns(_COL_SPEC, gap="small")
     for col, label in zip(cols, _COL_LABELS):
         col.markdown(
-            f"<div class='perm-table-header'><span>{label}</span></div>",
+            f"<div class='admin-table-header'><span>{label}</span></div>",
             unsafe_allow_html=True,
         )
 
@@ -120,12 +107,12 @@ def _table_row(row: pd.Series) -> None:
 
     cols[0].write(who)
     cols[0].markdown(
-        f"<div class='perm-meta'>{row['EMAIL']}</div>", unsafe_allow_html=True
+        f"<div class='admin-meta'>{row['EMAIL']}</div>", unsafe_allow_html=True
     )
 
     cols[1].write(app_name)
     cols[1].markdown(
-        f"<div class='perm-meta'>{areas_mod.display_name(row['AREA'])}</div>",
+        f"<div class='admin-meta'>{areas_mod.display_name(row['AREA'])}</div>",
         unsafe_allow_html=True,
     )
 
@@ -150,7 +137,6 @@ def render() -> None:
         "Conceda ou revogue o acesso de um colaborador a uma aplicação. "
         "O acesso vale para o login único (SSO) das aplicações protegidas."
     )
-    st.markdown(_TABLE_CSS, unsafe_allow_html=True)
 
     flash = st.session_state.pop("_flash", None)
     if flash:

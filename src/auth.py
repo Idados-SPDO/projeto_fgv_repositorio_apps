@@ -108,8 +108,10 @@ def refresh_session() -> bool:
     except Exception:
         pass
         
-    # Se falhou em renovar, limpa a sessão (logout forçado)
+    # Se falhou em renovar, limpa a sessão (logout forçado) e sinaliza para a
+    # tela de login avisar o usuário em vez de resetar silenciosamente.
     logout()
+    st.session_state["_session_expired"] = True
     return False
 
 def get_access_token() -> Optional[str]:

@@ -56,6 +56,27 @@ def _execute(sql: str, params: Optional[Iterable[Any]] = None) -> int:
         return cur.rowcount or 0
 
 
+# ---------- cache ------------------------------------------------------------
+#
+# Streamlit re-executa o script inteiro a cada interação. Sem cache, cada rerun
+# repaga o custo das queries de leitura no Snowflake. As leituras abaixo são
+# cacheadas (@st.cache_data) e invalidadas explicitamente após cada escrita que
+# as afeta, via _bust(). TTL curto como rede de segurança para mudanças feitas
+# fora do app. get_user_by_email NÃO é cacheada (usada na autenticação: precisa
+# sempre refletir o hash de senha atual).
+
+_CACHE_TTL = 300  # segundos
+
+
+def _bust(*funcs) -> None:
+    """Limpa o cache das funções de leitura passadas."""
+    for fn in funcs:
+        try:
+            fn.clear()
+        except Exception:
+            pass
+
+
 # ---------- TBL_USUARIOS_PROD -------------------------------------------------
 
 def get_user_by_email(email: str) -> Optional[dict]:
@@ -71,6 +92,7 @@ def get_user_by_email(email: str) -> Optional[dict]:
     return rows[0] if rows else None
 
 
+@st.cache_data(ttl=_CACHE_TTL, show_spinner=False)
 def list_users() -> pd.DataFrame:
     rows = _run(
         """
@@ -98,6 +120,7 @@ def create_user(
         """,
         [email, password_hash, full_name, role, area],
     )
+    _bust(list_users)
 
 
 def update_user(
@@ -119,6 +142,7 @@ def update_user(
         """,
         [full_name, role, area, is_active, user_id],
     )
+    _bust(list_users, list_permissions)
 
 
 def reset_user_password(user_id: int, new_password_hash: str) -> None:
@@ -132,6 +156,7 @@ def reset_user_password(user_id: int, new_password_hash: str) -> None:
         """,
         [new_password_hash, user_id],
     )
+    _bust(list_users)
 
 
 def change_user_password(user_id: int, new_password_hash: str) -> None:
@@ -145,6 +170,7 @@ def change_user_password(user_id: int, new_password_hash: str) -> None:
         """,
         [new_password_hash, user_id],
     )
+    _bust(list_users)
 
 
 def touch_last_login(user_id: int) -> None:
@@ -152,14 +178,17 @@ def touch_last_login(user_id: int) -> None:
         "UPDATE TBL_USUARIOS_PROD SET LAST_LOGIN_AT = CURRENT_TIMESTAMP() WHERE USER_ID = %s",
         [user_id],
     )
+    _bust(list_users)
 
 
 def delete_user(user_id: int) -> None:
     _execute("DELETE FROM TBL_USUARIOS_PROD WHERE USER_ID = %s", [user_id])
+    _bust(list_users, list_permissions)
 
 
 # ---------- TBL_DOMINIOS_APPS_PROD --------------------------------------------
 
+@st.cache_data(ttl=_CACHE_TTL, show_spinner=False)
 def list_applications(only_active: bool = True) -> pd.DataFrame:
     where = "WHERE IS_ACTIVE = TRUE" if only_active else ""
     rows = _run(
@@ -190,6 +219,7 @@ def create_application(
         """,
         [area, name, description, url, icon, created_by],
     )
+    _bust(list_applications, list_favorite_applications, list_permissions)
 
 
 def update_application(
@@ -215,15 +245,18 @@ def update_application(
         """,
         [area, name, description, url, icon, is_active, app_id],
     )
+    _bust(list_applications, list_favorite_applications, list_favorite_app_ids, list_permissions)
 
 
 def delete_application(app_id: int) -> None:
     _execute("DELETE FROM TBL_DOMINIOS_APPS_PROD WHERE APP_ID = %s", [app_id])
     _execute("DELETE FROM TBL_FAVORITOS_PROD WHERE APP_ID = %s", [app_id])
+    _bust(list_applications, list_favorite_applications, list_favorite_app_ids, list_permissions)
 
 
 # ---------- TBL_FAVORITOS_PROD ------------------------------------------------
 
+@st.cache_data(ttl=_CACHE_TTL, show_spinner=False)
 def list_favorite_app_ids(user_id: int) -> set[int]:
     rows = _run(
         "SELECT APP_ID FROM TBL_FAVORITOS_PROD WHERE USER_ID = %s",
@@ -240,14 +273,18 @@ def toggle_favorite(user_id: int, app_id: int) -> bool:
             [user_id, app_id],
         )
         if cur.rowcount and cur.rowcount > 0:
-            return False
-        cur.execute(
-            "INSERT INTO TBL_FAVORITOS_PROD (USER_ID, APP_ID) VALUES (%s, %s)",
-            [user_id, app_id],
-        )
-        return True
+            result = False
+        else:
+            cur.execute(
+                "INSERT INTO TBL_FAVORITOS_PROD (USER_ID, APP_ID) VALUES (%s, %s)",
+                [user_id, app_id],
+            )
+            result = True
+    _bust(list_favorite_app_ids, list_favorite_applications)
+    return result
 
 
+@st.cache_data(ttl=_CACHE_TTL, show_spinner=False)
 def list_favorite_applications(user_id: int) -> pd.DataFrame:
     rows = _run(
         """
@@ -266,6 +303,7 @@ def list_favorite_applications(user_id: int) -> pd.DataFrame:
 
 # ---------- TBL_USUARIOS_PERMISSOES_PROD --------------------------------------
 
+@st.cache_data(ttl=_CACHE_TTL, show_spinner=False)
 def list_permissions() -> pd.DataFrame:
     """Todas as permissões concedidas, já com nome do usuário e da aplicação."""
     rows = _run(
@@ -299,6 +337,7 @@ def grant_app_permission(user_id: int, app_id: int) -> bool:
         """,
         [user_id, app_id, user_id, app_id],
     )
+    _bust(list_permissions)
     return inserted > 0
 
 
@@ -307,3 +346,4 @@ def revoke_app_permission(user_id: int, app_id: int) -> None:
         "DELETE FROM TBL_USUARIOS_PERMISSOES_PROD WHERE USER_ID = %s AND APP_ID = %s",
         [user_id, app_id],
     )
+    _bust(list_permissions)
