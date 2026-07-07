@@ -33,6 +33,8 @@ def _restore_from_cookie() -> None:
     refresh_session pode chamar logout -> init_session). Entre reruns o flag
     volta a False, então uma sincronização atrasada do cookie é reavaliada.
     """
+    if st.session_state.get("_logged_out"):
+        return
     if st.session_state.get("_restoring"):
         return
     st.session_state["_restoring"] = True
@@ -41,6 +43,9 @@ def _restore_from_cookie() -> None:
         if not payload:
             return
         st.session_state["refresh_token"] = payload["rt"]
+        st.session_state["_cookie_meta"] = {
+            "uid": payload["uid"], "email": payload["email"], "remember": payload["remember"],
+        }
         if not refresh_session():
             return  # refresh_session já fez logout + limpou o cookie
         user = db.get_user_by_email(payload["email"])
@@ -48,6 +53,7 @@ def _restore_from_cookie() -> None:
             # refresh válido mas usuário sumiu da base: neutraliza a sessão por
             # completo (senão sobra token utilizável numa sessão sem usuário).
             session_cookie.clear()
+            st.session_state.pop("_cookie_meta", None)
             st.session_state["access_token"] = None
             st.session_state["refresh_token"] = None
             st.session_state["token_expires_at"] = 0
@@ -123,7 +129,12 @@ def login(email: str, password: str, remember: bool = False) -> tuple[bool, str]
         "area": user["AREA"],
         "must_change_password": bool(user["MUST_CHANGE_PASSWORD"]),
     }
-    session_cookie.save(refresh_token, user["USER_ID"], user["EMAIL"], remember)
+    st.session_state.pop("_logged_out", None)
+    if refresh_token:
+        session_cookie.save(refresh_token, user["USER_ID"], user["EMAIL"], remember)
+        st.session_state["_cookie_meta"] = {
+            "uid": user["USER_ID"], "email": user["EMAIL"], "remember": remember,
+        }
     if user["MUST_CHANGE_PASSWORD"]:
         st.session_state["page"] = "change_password"
     else:
@@ -165,18 +176,18 @@ def refresh_session() -> bool:
 def _sync_cookie_token() -> None:
     """Reescreve o cookie com o refresh_token rotacionado, preservando o remember.
 
-    Lê uid/email/remember do cookie atual e reemite com o novo refresh_token.
-    Se não há cookie (usuário não optou por persistir ou cookies bloqueados),
-    não cria um do zero.
+    Usa uid/email/remember cacheados na sessão (gravados no login/restore),
+    evitando reler+decifrar o cookie a cada rotação. Sem metadados (sessão sem
+    persistência), não faz nada.
     """
-    existing = session_cookie.load()
-    if existing is None:
+    meta = st.session_state.get("_cookie_meta")
+    if meta is None:
         return
     session_cookie.save(
         st.session_state["refresh_token"],
-        existing["uid"],
-        existing["email"],
-        existing["remember"],
+        meta["uid"],
+        meta["email"],
+        meta["remember"],
     )
 
 
@@ -212,6 +223,8 @@ def logout() -> None:
     session_cookie.clear()
     for key in SESSION_KEYS:
         st.session_state.pop(key, None)
+    st.session_state.pop("_cookie_meta", None)
+    st.session_state["_logged_out"] = True
     init_session()
 
 

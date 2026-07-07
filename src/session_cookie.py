@@ -18,9 +18,23 @@ _PAYLOAD_VERSION = 1
 _REMEMBER_MAX_AGE = 7 * 24 * 60 * 60  # 7 dias, em segundos
 
 
-def _fernet() -> Fernet:
-    key = st.secrets["session"]["cookie_key"]
-    return Fernet(key.encode() if isinstance(key, str) else key)
+def _fernet() -> Optional[Fernet]:
+    """Fernet a partir do segredo, ou None se o segredo não estiver configurado.
+
+    Degradar para None (em vez de levantar) faz a persistência via cookie virar
+    um no-op silencioso quando `st.secrets["session"]["cookie_key"]` falta ou é
+    inválido — o login/carregamento continua funcionando, só sem "lembrar".
+    """
+    try:
+        key = st.secrets["session"]["cookie_key"]
+    except Exception:
+        return None
+    if not key:
+        return None
+    try:
+        return Fernet(key.encode() if isinstance(key, str) else key)
+    except (ValueError, TypeError):
+        return None
 
 
 def _encode(fernet: Fernet, refresh_token: str, user_id: int, email: str, remember: bool) -> str:
@@ -53,7 +67,10 @@ def _controller() -> CookieController:
 
 
 def save(refresh_token: str, user_id: int, email: str, remember: bool) -> None:
-    token = _encode(_fernet(), refresh_token, user_id, email, remember)
+    fernet = _fernet()
+    if fernet is None:
+        return
+    token = _encode(fernet, refresh_token, user_id, email, remember)
     ctrl = _controller()
     if remember:
         ctrl.set(COOKIE_NAME, token, max_age=_REMEMBER_MAX_AGE, secure=True, same_site="strict")
@@ -62,10 +79,13 @@ def save(refresh_token: str, user_id: int, email: str, remember: bool) -> None:
 
 
 def load() -> Optional[dict]:
+    fernet = _fernet()
+    if fernet is None:
+        return None
     token = _controller().get(COOKIE_NAME)
     if not token:
         return None
-    return _decode(_fernet(), token)
+    return _decode(fernet, token)
 
 
 def clear() -> None:

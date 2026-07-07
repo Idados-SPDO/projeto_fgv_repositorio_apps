@@ -60,3 +60,17 @@ def test_clear_removes_cookie(fake):
     session_cookie.save("rt", 5, "e@fgv.br", True)
     session_cookie.clear()
     assert session_cookie.load() is None
+
+
+def test_save_without_secret_is_noop(monkeypatch):
+    monkeypatch.setattr(session_cookie, "_fernet", lambda: None)
+    calls = []
+    monkeypatch.setattr(session_cookie, "_controller",
+                        lambda: type("C", (), {"set": lambda self, *a, **k: calls.append(a)})())
+    session_cookie.save("rt", 5, "e@fgv.br", True)  # não deve levantar
+    assert calls == []
+
+
+def test_load_without_secret_returns_none(monkeypatch):
+    monkeypatch.setattr(session_cookie, "_fernet", lambda: None)
+    assert session_cookie.load() is None
