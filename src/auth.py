@@ -8,7 +8,7 @@ import bcrypt
 import requests
 import streamlit as st
 
-from . import db
+from . import db, session_cookie
 
 
 # ---------- sessão ------------------------------------------------------------
@@ -22,6 +22,46 @@ def init_session() -> None:
     st.session_state.setdefault("access_token", None)
     st.session_state.setdefault("refresh_token", None)
     st.session_state.setdefault("token_expires_at", 0)
+    if st.session_state.get("user") is None:
+        _restore_from_cookie()
+
+
+def _restore_from_cookie() -> None:
+    """Reconstrói a sessão a partir do cookie criptografado (sobrevive ao F5).
+
+    O guard `_restoring` evita reentrância dentro da mesma execução (o
+    refresh_session pode chamar logout -> init_session). Entre reruns o flag
+    volta a False, então uma sincronização atrasada do cookie é reavaliada.
+    """
+    if st.session_state.get("_restoring"):
+        return
+    st.session_state["_restoring"] = True
+    try:
+        payload = session_cookie.load()
+        if not payload:
+            return
+        st.session_state["refresh_token"] = payload["rt"]
+        if not refresh_session():
+            return  # refresh_session já fez logout + limpou o cookie
+        user = db.get_user_by_email(payload["email"])
+        if not user:
+            session_cookie.clear()
+            return
+        st.session_state["user"] = {
+            "id": user["USER_ID"],
+            "email": user["EMAIL"],
+            "name": user["FULL_NAME"],
+            "role": user["ROLE"],
+            "area": user["AREA"],
+            "must_change_password": bool(user["MUST_CHANGE_PASSWORD"]),
+        }
+        if user["MUST_CHANGE_PASSWORD"]:
+            st.session_state["page"] = "change_password"
+        elif st.session_state.get("page", "login") == "login":
+            has_favs = bool(db.list_favorite_app_ids(user["USER_ID"]))
+            st.session_state["page"] = "favorites" if has_favs else "home"
+    finally:
+        st.session_state["_restoring"] = False
 
 
 # ---------- login via API centralizada ----------------------------------------
@@ -32,7 +72,7 @@ def _auth_api_url() -> str:
     )
 
 
-def login(email: str, password: str) -> tuple[bool, str]:
+def login(email: str, password: str, remember: bool = False) -> tuple[bool, str]:
     url = f"{_auth_api_url()}/login"
     try:
         resp = requests.post(
@@ -78,6 +118,7 @@ def login(email: str, password: str) -> tuple[bool, str]:
         "area": user["AREA"],
         "must_change_password": bool(user["MUST_CHANGE_PASSWORD"]),
     }
+    session_cookie.save(refresh_token, user["USER_ID"], user["EMAIL"], remember)
     if user["MUST_CHANGE_PASSWORD"]:
         st.session_state["page"] = "change_password"
     else:
@@ -104,15 +145,35 @@ def refresh_session() -> bool:
                 st.session_state["access_token"] = tokens["access_token"]
                 st.session_state["refresh_token"] = tokens.get("refresh_token", refresh_token)
                 st.session_state["token_expires_at"] = time.time() + (14 * 60)
+                _sync_cookie_token()
                 return True
     except Exception:
         pass
-        
+
     # Se falhou em renovar, limpa a sessão (logout forçado) e sinaliza para a
     # tela de login avisar o usuário em vez de resetar silenciosamente.
     logout()
     st.session_state["_session_expired"] = True
     return False
+
+
+def _sync_cookie_token() -> None:
+    """Reescreve o cookie com o refresh_token rotacionado, preservando o remember.
+
+    Lê uid/email/remember do cookie atual e reemite com o novo refresh_token.
+    Se não há cookie (usuário não optou por persistir ou cookies bloqueados),
+    não cria um do zero.
+    """
+    existing = session_cookie.load()
+    if existing is None:
+        return
+    session_cookie.save(
+        st.session_state["refresh_token"],
+        existing["uid"],
+        existing["email"],
+        existing["remember"],
+    )
+
 
 def get_access_token() -> Optional[str]:
     """Retorna o access_token JWT da sessão atual (ou None), renovando se necessário."""
@@ -143,6 +204,7 @@ def logout() -> None:
             requests.post(f"{_auth_api_url()}/logout", json={"token": token}, timeout=5)
         except requests.RequestException:
             pass  # logout local prossegue mesmo se a revogação central falhar
+    session_cookie.clear()
     for key in SESSION_KEYS:
         st.session_state.pop(key, None)
     init_session()
