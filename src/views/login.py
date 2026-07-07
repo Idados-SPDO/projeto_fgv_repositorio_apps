@@ -9,6 +9,9 @@ from .. import auth, branding
 def render() -> None:
     title = st.secrets.get("app", {}).get("title", "Repositório de Aplicações")
 
+    if st.session_state.pop("_session_expired", False):
+        st.warning("Sua sessão expirou. Faça login novamente.")
+
     # logo no canto superior esquerdo
     st.markdown(
         f"<div style='margin: 0 0 1.2rem 0;'>{branding.logo_html(height_px=56)}</div>",
@@ -27,13 +30,15 @@ def render() -> None:
         with st.form("login_form", clear_on_submit=False):
             email = st.text_input("Email", placeholder="seu.email@fgv.br")
             password = st.text_input("Senha", type="password")
+            remember = st.checkbox("Lembrar de mim", value=False)
             submitted = st.form_submit_button("Entrar", use_container_width=True, type="primary")
 
         if submitted:
             if not email or not password:
                 st.error("Informe email e senha.")
                 return
-            ok, msg = auth.login(email.strip(), password)
+            with st.spinner("Entrando..."):
+                ok, msg = auth.login(email.strip(), password, remember)
             if ok:
                 st.rerun()
             else:

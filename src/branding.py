@@ -13,6 +13,7 @@ APP_NAME = "Repositório de Aplicações FGV IBRE"
 CREATED_AT = "28/05/2026"
 
 
+@st.cache_data(show_spinner=False)
 def _logo_data_uri() -> str | None:
     if not LOGO_PATH.exists():
         return None
@@ -37,6 +38,7 @@ def logo_html(*, height_px: int = 48, fallback_text: str = "FGV IBRE") -> str:
 
 
 def render_footer() -> None:
+    # o CSS de .fgv-footer vive em src/styles.py (injetado uma vez em app.main)
     st.markdown(
         f"""
         <div class='fgv-footer'>
@@ -46,35 +48,6 @@ def render_footer() -> None:
             <span class='sep'>|</span>
             <span>Criado em {CREATED_AT}</span>
         </div>
-        <style>
-        .fgv-footer {{
-            position: fixed;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            z-index: 999;
-            background: #ffffff;
-            border-top: 1px solid #e3e7ee;
-            padding: 8px 16px;
-            text-align: center;
-            color: #6b7280;
-            font-size: 0.78rem;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            gap: 0.6rem;
-            flex-wrap: wrap;
-            box-shadow: 0 -1px 4px rgba(15, 30, 60, 0.04);
-        }}
-        .fgv-footer .sep {{
-            color: #cbd5e1;
-            font-weight: 400;
-        }}
-        /* espaco extra no final do conteudo para nao ficar atras do rodape fixo */
-        .block-container {{
-            padding-bottom: 4rem !important;
-        }}
-        </style>
         """,
         unsafe_allow_html=True,
     )
