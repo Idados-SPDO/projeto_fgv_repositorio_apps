@@ -46,3 +46,27 @@ def _decode(fernet: Fernet, token: str) -> Optional[dict]:
     if not isinstance(payload, dict) or payload.get("v") != _PAYLOAD_VERSION:
         return None
     return payload
+
+
+def _controller() -> CookieController:
+    return CookieController()
+
+
+def save(refresh_token: str, user_id: int, email: str, remember: bool) -> None:
+    token = _encode(_fernet(), refresh_token, user_id, email, remember)
+    ctrl = _controller()
+    if remember:
+        ctrl.set(COOKIE_NAME, token, max_age=_REMEMBER_MAX_AGE, secure=True, same_site="strict")
+    else:
+        ctrl.set(COOKIE_NAME, token, secure=True, same_site="strict")
+
+
+def load() -> Optional[dict]:
+    token = _controller().get(COOKIE_NAME)
+    if not token:
+        return None
+    return _decode(_fernet(), token)
+
+
+def clear() -> None:
+    _controller().remove(COOKIE_NAME)
