@@ -109,5 +109,7 @@ def test_sync_cookie_token_noop_without_meta(monkeypatch, state):
     called = {"saved": False}
     monkeypatch.setattr(session_cookie, "save",
                         lambda *a, **k: called.__setitem__("saved", True))
+    monkeypatch.setattr(session_cookie, "load",
+                        lambda: (_ for _ in ()).throw(AssertionError("não deve consultar o cookie sem meta")))
     auth._sync_cookie_token()
     assert called["saved"] is False

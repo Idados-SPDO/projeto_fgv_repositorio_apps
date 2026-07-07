@@ -73,4 +73,6 @@ def test_save_without_secret_is_noop(monkeypatch):
 
 def test_load_without_secret_returns_none(monkeypatch):
     monkeypatch.setattr(session_cookie, "_fernet", lambda: None)
+    monkeypatch.setattr(session_cookie, "_controller",
+                        lambda: (_ for _ in ()).throw(AssertionError("não deve ler o cookie sem segredo")))
     assert session_cookie.load() is None
