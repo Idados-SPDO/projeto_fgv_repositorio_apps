@@ -70,8 +70,9 @@ div[data-testid="stHorizontalBlock"] {
 .fgv-card-actions {
     flex: 0 0 auto;
     display: flex;
-    justify-content: center;
+    justify-content: start;
     margin-top: auto;
+    margin-bottom: 1rem;
 }
 .fgv-card-actions form { margin: 0; padding: 0; }
 .fgv-card-open {
