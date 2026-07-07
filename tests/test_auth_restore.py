@@ -49,3 +49,19 @@ def test_restore_no_cookie_is_noop(monkeypatch, state):
     monkeypatch.setattr(session_cookie, "load", lambda: None)
     auth.init_session()
     assert state["user"] is None
+
+
+def test_restore_user_not_found_clears_tokens(monkeypatch, state):
+    monkeypatch.setattr(session_cookie, "load",
+                        lambda: {"rt": "rt-1", "uid": 7, "email": "sumiu@fgv.br", "remember": True, "v": 1})
+    monkeypatch.setattr(auth, "refresh_session", lambda: True)
+    monkeypatch.setattr(auth.db, "get_user_by_email", lambda email: None)
+    cleared = {"cookie": False}
+    monkeypatch.setattr(session_cookie, "clear", lambda: cleared.__setitem__("cookie", True))
+
+    auth.init_session()
+
+    assert state["user"] is None
+    assert state["refresh_token"] is None
+    assert state["access_token"] is None
+    assert cleared["cookie"] is True

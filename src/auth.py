@@ -45,7 +45,12 @@ def _restore_from_cookie() -> None:
             return  # refresh_session já fez logout + limpou o cookie
         user = db.get_user_by_email(payload["email"])
         if not user:
+            # refresh válido mas usuário sumiu da base: neutraliza a sessão por
+            # completo (senão sobra token utilizável numa sessão sem usuário).
             session_cookie.clear()
+            st.session_state["access_token"] = None
+            st.session_state["refresh_token"] = None
+            st.session_state["token_expires_at"] = 0
             return
         st.session_state["user"] = {
             "id": user["USER_ID"],
