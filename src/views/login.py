@@ -30,6 +30,7 @@ def render() -> None:
         with st.form("login_form", clear_on_submit=False):
             email = st.text_input("Email", placeholder="seu.email@fgv.br")
             password = st.text_input("Senha", type="password")
+            remember = st.checkbox("Lembrar de mim", value=False)
             submitted = st.form_submit_button("Entrar", use_container_width=True, type="primary")
 
         if submitted:
@@ -37,7 +38,7 @@ def render() -> None:
                 st.error("Informe email e senha.")
                 return
             with st.spinner("Entrando..."):
-                ok, msg = auth.login(email.strip(), password)
+                ok, msg = auth.login(email.strip(), password, remember)
             if ok:
                 st.rerun()
             else:
