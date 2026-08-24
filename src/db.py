@@ -8,6 +8,7 @@ Tabelas:
 """
 from __future__ import annotations
 
+import base64
 from contextlib import contextmanager
 from typing import Any, Iterable, Optional
 
@@ -24,7 +25,7 @@ def _get_connection():
     return snowflake.connector.connect(
         account=cfg["account"],
         user=cfg["user"],
-        password=cfg["password"],
+        private_key=base64.b64decode(cfg["private_key"]),
         role=cfg.get("role"),
         warehouse=cfg["warehouse"],
         database=cfg["database"],

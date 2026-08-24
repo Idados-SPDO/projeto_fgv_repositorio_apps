@@ -18,6 +18,7 @@ obrigado a trocar a senha no primeiro login.
 from __future__ import annotations
 
 import argparse
+import base64
 import sys
 import tomllib
 from pathlib import Path
@@ -94,7 +95,7 @@ def _connect():
     return snowflake.connector.connect(
         account=cfg["account"],
         user=cfg["user"],
-        password=cfg["password"],
+        private_key=base64.b64decode(cfg["private_key"]),
         role=cfg.get("role"),
         warehouse=cfg["warehouse"],
         database=cfg["database"],

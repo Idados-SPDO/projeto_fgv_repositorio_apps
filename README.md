@@ -110,7 +110,7 @@ Abre em http://localhost:8501. Faça login com o email/senha definidos; o sistem
    [snowflake]
    account   = "..."
    user      = "..."
-   password  = "..."
+   private_key = "..."   # miolo base64 do PEM PKCS8 (key-pair auth)
    role      = "..."
    warehouse = "..."
    database  = "BASES_SPDO"
